@@ -38,5 +38,6 @@ Currently there are options for:
 * Orthogonal or +Diagonal Pathing 
 * Pathing Algorithm (DFS, BFS, Dijkstra, A-Star)
 * Toggle Dijkstra heatmap for mouse cursor
+
 Coming Soon: Choosing Map Generation Algorithm
 
