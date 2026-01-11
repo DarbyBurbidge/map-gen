@@ -22,3 +22,12 @@ Note: A checkbox does not indicate customizable, simply that it is an enabled op
 * [x] Breadth First Search
 * [x] Dijkstra
 * [x] A-Star
+
+#### Customizability
+Currently there are options for:
+* Walking or Flying (ignores "chasms")
+* Orthogonal or +Diagonal Pathing 
+* Pathing Algorithm (DFS, BFS, Dijkstra, A-Star)
+* Toggle Dijkstra heatmap for mouse cursor
+Coming Soon: Choosing Map Generation Algorithm
+
