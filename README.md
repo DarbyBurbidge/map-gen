@@ -9,6 +9,7 @@ libraries used:
 
 Other resources:
 [Roguelike Celebration: Herbert Wolverson - Procedural Map Generation Techniques](https://www.youtube.com/watch?v=TlLIOgWYVpI): Pretty much all map gen techniques planned are discussed in the video.
+
 [Computerphile: Dijkstra's Algorithm](https://www.youtube.com/watch?v=GazC3A4OQTE)
 [Computerphile: A* Search Algorithm](https://www.youtube.com/watch?v=ySN5Wnu88nE)
 
