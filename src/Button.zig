@@ -135,8 +135,8 @@ pub const PathingButton = struct {
                 color = .dark_gray;
                 text_color = .gold;
             },
-            .dykstra => {
-                message = "dykstra"[0..];
+            .dijkstra => {
+                message = "dijkstra"[0..];
                 color = .dark_gray;
                 text_color = .light_gray;
             },
@@ -179,8 +179,8 @@ pub const PathingButton = struct {
                 self.color = .dark_gray;
                 self.text_color = .gold;
             },
-            .dykstra => {
-                self.message = "dykstra"[0..];
+            .dijkstra => {
+                self.message = "dijkstra"[0..];
                 self.color = .light_gray;
                 self.text_color = .dark_gray;
             },

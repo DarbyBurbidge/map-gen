@@ -20,11 +20,8 @@ pub fn init(screenWidth: u16, screenHeight: u16, tileSize: u8, gpa: *const Alloc
     const gridSize = gridWidth * gridHeight;
     var tiles = try gpa.alloc(Tile, gridSize);
     for (0..gridSize) |idx| {
-        //std.debug.print("gridWidth: {}, gridHeight: {}\n", .{ gridWidth, gridHeight });
         const x_pos = (idx % gridWidth) * tileSize;
-        //std.debug.print("x: {}", .{x_pos});
         const y_pos = (idx / gridWidth) * tileSize;
-        //std.debug.print("y: {}\n", .{y_pos});
         tiles[idx] = Tile.init(@floatFromInt(x_pos), @floatFromInt(y_pos), @floatFromInt(tileSize), .unformed);
     }
 

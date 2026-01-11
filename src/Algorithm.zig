@@ -112,8 +112,7 @@ pub const Pathing = struct {
             for (self.map, 0..) |node, i| {
                 const index = @as(f32, @floatFromInt(i));
                 if (node != -1) {
-                    std.debug.print("node: {}", .{node});
-                    const node_color = rl.colorFromHSV(@mod(60 - node * 3, 360), 0.8, 1 - 0.01 * node);
+                    const node_color = rl.colorFromHSV(@mod(60 - node * 3.0, 360), 0.8, 1 - 0.009 * node);
                     const rect = rl.Rectangle{
                         .x = @mod(index, self.width) * 16 + 2,
                         .y = @divFloor(index, self.width) * 16 + 2,
@@ -121,7 +120,6 @@ pub const Pathing = struct {
                         .height = 16.0 - 4,
                     };
                     rl.drawRectangleRounded(rect, 0.2, 0.0, .fade(node_color, 1.0));
-                    //rl.drawTextEx(self.font.?, rl.textFormat("{}", .{node}), .{ .x = @mod(index, self.width) * 16, .y = @divFloor(index, self.width) * 16 }, 16, 2, node_color);
                 }
             }
         }
@@ -132,7 +130,7 @@ pub const Pathing = struct {
     };
 
     pub fn get_dijkstra_map(grid: Grid, idx: i32, path_type: TraversalType, mobility_type: Mobility, allocator: std.mem.Allocator) !DijkstraMap {
-        var queue = std.PriorityQueue(DykstraTracker, void, getDykstraCost).init(allocator, undefined);
+        var queue = std.PriorityQueue(DijkstraTracker, void, getDijkstraCost).init(allocator, undefined);
         defer queue.deinit();
         var visited = try allocator.alloc(bool, grid.tiles.len);
         var d_map = try allocator.alloc(f32, grid.tiles.len);
@@ -143,7 +141,7 @@ pub const Pathing = struct {
         for (d_map, 0..) |_, i| {
             d_map[i] = -1;
         }
-        const start = DykstraTracker{
+        const start = DijkstraTracker{
             .idx = idx,
             .parent = -1,
             .cost = 1,
@@ -152,7 +150,6 @@ pub const Pathing = struct {
         try queue.add(start);
         var insert_order: usize = 0;
         while (queue.removeOrNull()) |node| : (insert_order += 1) {
-            std.debug.print("node idx: {}\n", .{node.idx});
             visited[@intCast(node.idx)] = true;
             d_map[@intCast(node.idx)] = node.cost;
             const neighbors = get_neighbors(grid, node.idx, visited, path_type, mobility_type);
@@ -167,7 +164,7 @@ pub const Pathing = struct {
                             _ = queue.removeIndex(queue_idx);
                         }
                     }
-                    const new_tracker = DykstraTracker{
+                    const new_tracker = DijkstraTracker{
                         .idx = u_neighbor,
                         .parent = node.idx,
                         .cost = node.cost + 1,
@@ -188,7 +185,7 @@ pub const Pathing = struct {
     pub const Algorithm = enum {
         dfs,
         bfs,
-        dykstra,
+        dijkstra,
         a_star,
 
         pub fn next(self: *@This()) void {
@@ -197,9 +194,9 @@ pub const Pathing = struct {
                     self.* = .bfs;
                 },
                 .bfs => {
-                    self.* = .dykstra;
+                    self.* = .dijkstra;
                 },
-                .dykstra => {
+                .dijkstra => {
                     self.* = .a_star;
                 },
                 .a_star => {
@@ -231,10 +228,8 @@ pub const Pathing = struct {
             visited[i] = false;
         }
         const path_found = dfs_helper(grid, @intCast(idx), visited, @intCast(end_idx), path_type, mobility_type);
-        if (path_found) {
-            std.debug.print("path found\n", .{});
-        } else {
-            std.debug.print("path not found\n", .{});
+        if (!path_found) {
+            std.debug.print("Could not find path\n", .{});
         }
     }
 
@@ -332,12 +327,10 @@ pub const Pathing = struct {
             .idx = idx,
             .parent = -1,
         };
-        //std.debug.print("bfs idx: {}, bfs parent: {}\n", .{ start.idx, start.parent });
         try queue.append(allocator, start);
         var tiles: u32 = 0;
         while (queue.items.len != 0) : (tiles += 1) {
             var node = queue.orderedRemove(0);
-            std.debug.print("bfs idx: {}, bfs parent: {}\n", .{ node.idx, node.parent });
 
             visited[@intCast(node.idx)] = true;
             try path.append(allocator, node);
@@ -346,7 +339,6 @@ pub const Pathing = struct {
                 break;
             }
             const neighbors = get_neighbors(grid, node.idx, visited, path_type, mobility_type);
-            //std.debug.print("neighbors: {any}", .{neighbors});
             for (0..neighbors.len) |i| {
                 const neighbor = neighbors[i];
                 if (neighbor) |u_neighbor| {
@@ -357,7 +349,6 @@ pub const Pathing = struct {
                         .idx = u_neighbor,
                         .parent = node.idx,
                     };
-                    //std.debug.print("bfs idx: {}, bfs parent: {}\n", .{ node.idx, node.parent });
                     try queue.append(allocator, new_tracker);
                 }
             }
@@ -431,7 +422,6 @@ pub const Pathing = struct {
             const x = @mod(idx, cols);
             const y = @divFloor(idx, cols);
             // check bounds
-            //std.debug.print("idx: {}, x: {}, y: {}, rows: {}, cols: {}\n", .{ idx, x, y, rows, cols });
             if (idx < 0 or idx >= grid.tiles.len or 0 > x or x >= cols or 0 > y or y >= rows) {
                 return null;
             }
@@ -447,7 +437,6 @@ pub const Pathing = struct {
                 return null;
             }
 
-            //std.debug.print("tile_enum: {}, pathing_enum: {}\n", .{ @intFromEnum(tile.traversible), @intFromEnum(path_type) + 1 });
             if (@intFromEnum(tile.get_traversible()) > @as(u16, @intFromEnum(path_type)) + 1) {
                 return null;
             }
@@ -457,13 +446,13 @@ pub const Pathing = struct {
         return null;
     }
 
-    const DykstraTracker = struct {
+    const DijkstraTracker = struct {
         idx: i32,
         parent: i32,
         cost: f32,
         insert_order: usize,
     };
-    fn getDykstraCost(context: void, a: DykstraTracker, b: DykstraTracker) std.math.Order {
+    fn getDijkstraCost(context: void, a: DijkstraTracker, b: DijkstraTracker) std.math.Order {
         _ = context;
         if (a.cost != b.cost) {
             if (a.cost < b.cost) {
@@ -478,7 +467,7 @@ pub const Pathing = struct {
         }
     }
 
-    fn already_in_queue(queue: *std.PriorityQueue(DykstraTracker, void, getDykstraCost), index: i32) ?usize {
+    fn already_in_queue(queue: *std.PriorityQueue(DijkstraTracker, void, getDijkstraCost), index: i32) ?usize {
         for (queue.items, 0..) |item, i| {
             if (item.idx == index) {
                 return i;
@@ -487,9 +476,9 @@ pub const Pathing = struct {
         return null;
     }
 
-    pub fn dykstra(grid: Grid, idx: i32, end_idx: i32, path_type: TraversalType, mobility_type: Mobility, allocator: std.mem.Allocator) !void {
-        var queue = std.PriorityQueue(DykstraTracker, void, getDykstraCost).init(allocator, undefined);
-        var path: std.ArrayList(DykstraTracker) = .empty;
+    pub fn dijkstra(grid: Grid, idx: i32, end_idx: i32, path_type: TraversalType, mobility_type: Mobility, allocator: std.mem.Allocator) !void {
+        var queue = std.PriorityQueue(DijkstraTracker, void, getDijkstraCost).init(allocator, undefined);
+        var path: std.ArrayList(DijkstraTracker) = .empty;
         defer queue.deinit();
         defer path.deinit(allocator);
         var visited = try allocator.alloc(bool, grid.tiles.len);
@@ -500,17 +489,15 @@ pub const Pathing = struct {
 
         var end_found: bool = false;
 
-        const start = DykstraTracker{
+        const start = DijkstraTracker{
             .idx = idx,
             .parent = -1,
             .cost = 1,
             .insert_order = 0,
         };
-        //std.debug.print("dykstra idx: {}, dykstra parent: {}\n", .{ start.idx, start.parent });
         try queue.add(start);
         var insert_order: usize = 0;
         while (queue.removeOrNull()) |node| : (insert_order += 1) {
-            //std.debug.print("dykstra idx: {}, dykstra parent: {}\n", .{ node.idx, node.parent });
             visited[@intCast(node.idx)] = true;
             try path.append(allocator, node);
             if (node.idx == end_idx) {
@@ -518,7 +505,6 @@ pub const Pathing = struct {
                 break;
             }
             const neighbors = get_neighbors(grid, node.idx, visited, path_type, mobility_type);
-            //std.debug.print("{any}\n", .{neighbors});
             for (0..neighbors.len) |i| {
                 const neighbor = neighbors[i];
                 if (neighbor) |u_neighbor| {
@@ -530,13 +516,12 @@ pub const Pathing = struct {
                             _ = queue.removeIndex(queue_idx);
                         }
                     }
-                    const new_tracker = DykstraTracker{
+                    const new_tracker = DijkstraTracker{
                         .idx = u_neighbor,
                         .parent = node.idx,
                         .cost = node.cost + 1,
                         .insert_order = insert_order,
                     };
-                    //std.debug.print("bfs idx: {}, bfs parent: {}\n", .{ node.idx, node.parent });
                     try queue.add(new_tracker);
                 }
             }
@@ -576,8 +561,8 @@ pub const Pathing = struct {
     }
 
     pub fn a_star(grid: Grid, idx: i32, end_idx: i32, path_type: TraversalType, mobility_type: Mobility, allocator: std.mem.Allocator) !void {
-        var queue = std.PriorityQueue(DykstraTracker, void, getDykstraCost).init(allocator, undefined);
-        var path: std.ArrayList(DykstraTracker) = .empty;
+        var queue = std.PriorityQueue(DijkstraTracker, void, getDijkstraCost).init(allocator, undefined);
+        var path: std.ArrayList(DijkstraTracker) = .empty;
         defer queue.deinit();
         defer path.deinit(allocator);
         var visited = try allocator.alloc(bool, grid.tiles.len);
@@ -588,17 +573,15 @@ pub const Pathing = struct {
 
         var end_found: bool = false;
 
-        const start = DykstraTracker{
+        const start = DijkstraTracker{
             .idx = idx,
             .parent = -1,
             .cost = estimate_path_cost(grid, idx, end_idx),
             .insert_order = 0,
         };
-        //std.debug.print("dykstra idx: {}, dykstra parent: {}\n", .{ start.idx, start.parent });
         try queue.add(start);
         var insert_order: usize = 0;
         while (queue.removeOrNull()) |node| : (insert_order += 1) {
-            //std.debug.print("dykstra idx: {}, dykstra parent: {}\n", .{ node.idx, node.parent });
             visited[@intCast(node.idx)] = true;
             try path.append(allocator, node);
             if (node.idx == end_idx) {
@@ -606,7 +589,6 @@ pub const Pathing = struct {
                 break;
             }
             const neighbors = get_neighbors(grid, node.idx, visited, path_type, mobility_type);
-            //std.debug.print("{any}\n", .{neighbors});
             for (0..neighbors.len) |i| {
                 const neighbor = neighbors[i];
                 if (neighbor) |u_neighbor| {
@@ -619,13 +601,12 @@ pub const Pathing = struct {
                             _ = queue.removeIndex(queue_idx);
                         }
                     }
-                    const new_tracker = DykstraTracker{
+                    const new_tracker = DijkstraTracker{
                         .idx = u_neighbor,
                         .parent = node.idx,
                         .cost = cost,
                         .insert_order = insert_order,
                     };
-                    //std.debug.print("bfs idx: {}, bfs parent: {}\n", .{ node.idx, node.parent });
                     try queue.add(new_tracker);
                 }
             }

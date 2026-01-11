@@ -24,7 +24,7 @@ pub fn main() !void {
 
     // Load the font
     var font: rl.Font = rl.loadFontEx(
-        "./resources/november.ttf",
+        "/home/darby/Projects/systems/map-gen/src/resources/november.ttf",
         24,
         null,
     ) catch |err| {
@@ -49,7 +49,6 @@ pub fn main() !void {
     var path_algo: PathingAlgo = .dfs;
     var mobility_type: Mobility = .orthogonal;
     var map = try Grid.init(screenWidth, screenHeight - 128, tileSize, &allocator);
-    std.debug.print("map height: {}", .{map.height});
     var button_box = ButtonBox{
         .rect = rl.Rectangle{
             .x = 0,
@@ -95,20 +94,16 @@ pub fn main() !void {
                         start_selected = false;
                         start_idx = -1;
                         tile.*.set_state(.none);
-                        std.debug.print("Start deselected! start_idx: {}\n", .{start_idx});
                     } else if (end_selected and end_idx == idx) {
                         end_selected = false;
                         end_idx = -1;
                         tile.*.set_state(.none);
-                        std.debug.print("End deselected! start_idx: {}\n", .{start_idx});
                     } else if (!start_selected) {
                         tile.*.set_state(.start);
                         //tile.*.color = .green;
                         start_selected = true;
                         start_idx = @intCast(idx);
-                        std.debug.print("Start selected! start_idx: {}\n", .{start_idx});
                     } else if (!end_selected) {
-                        std.debug.print("End selected!\n", .{});
                         tile.*.set_state(.end);
                         end_selected = true;
                         end_idx = @intCast(idx);
@@ -152,7 +147,6 @@ pub fn main() !void {
             }
         }
         if (heat_map_on) {
-            std.debug.print("mouse idx: {}\n", .{mouse_idx});
             if (mouse_idx > 0) {
                 var d_map = try Algorithm.Pathing.get_dijkstra_map(map, mouse_idx, pathing_type, mobility_type, allocator);
                 d_map.set_font(font);
@@ -178,8 +172,8 @@ pub fn main() !void {
                 .bfs => {
                     try Algorithm.Pathing.bfs(map, @intCast(start_idx), @intCast(end_idx), pathing_type, mobility_type, allocator);
                 },
-                .dykstra => {
-                    try Algorithm.Pathing.dykstra(map, @intCast(start_idx), @intCast(end_idx), pathing_type, mobility_type, allocator);
+                .dijkstra => {
+                    try Algorithm.Pathing.dijkstra(map, @intCast(start_idx), @intCast(end_idx), pathing_type, mobility_type, allocator);
                 },
                 .a_star => {
                     try Algorithm.Pathing.a_star(map, @intCast(start_idx), @intCast(end_idx), pathing_type, mobility_type, allocator);
