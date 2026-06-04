@@ -3,6 +3,8 @@ const rl = @import("raylib");
 const Pathing = @import("Algorithm.zig").Pathing;
 const PathingAlgo = Pathing.Algorithm;
 const Mobility = Pathing.Mobility;
+const Generation = @import("Algorithm.zig").Generation;
+const GenerationAlgo = Generation.Algorithm;
 
 const Active = enum {
     on,
@@ -226,6 +228,32 @@ pub const MapAlgorithmButton = struct {
             .text_color = .dark_gray,
             .font = font,
         };
+    }
+
+    pub fn on_click(self: *@This(), map_algo_type: *GenerationAlgo) void {
+        map_algo_type.next();
+        switch (map_algo_type.*) {
+            .ca => {
+                self.message = "ortho"[0..];
+                self.color = .light_gray;
+                self.text_color = .dark_gray;
+            },
+            .bsp => {
+                self.message = "diag"[0..];
+                self.color = .dark_gray;
+                self.text_color = .gold;
+            },
+            .voronoi => {
+                self.message = "ortho"[0..];
+                self.color = .light_gray;
+                self.text_color = .dark_gray;
+            },
+            .noise => {
+                self.message = "diag"[0..];
+                self.color = .dark_gray;
+                self.text_color = .gold;
+            },
+        }
     }
 
     pub fn draw(self: *@This()) void {

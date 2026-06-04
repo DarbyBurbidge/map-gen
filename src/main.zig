@@ -1,4 +1,5 @@
 const std = @import("std");
+const Init = std.process.Init;
 const assert = std.debug.assert;
 const rl = @import("raylib");
 const rg = @import("raygui");
@@ -11,19 +12,21 @@ const Button = @import("Button.zig");
 const ButtonBox = Button.ButtonBox;
 const PathingAlgo = Algorithm.Pathing.Algorithm;
 const Mobility = Algorithm.Pathing.Mobility;
+const GenerationAlgo = Algorithm.Generation.Algorithm;
 const TraversalType = @import("Tile.zig").TraversalType;
 
-pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+pub fn main(init: Init) !void {
+    var gpa = std.heap.DebugAllocator(.{}){};
+    const io = init.io;
     const allocator = gpa.allocator();
-    const screenWidth = 800;
-    const screenHeight = 640;
+    const screenWidth = 1856;
+    const screenHeight = 1056;
 
     rl.initWindow(screenWidth, screenHeight, "map-gen");
     defer rl.closeWindow();
 
     // Load the font
-    var font: rl.Font = rl.loadFontEx(
+    const font: rl.Font = rl.loadFontEx(
         "/home/darby/Projects/systems/map-gen/src/resources/november.ttf",
         24,
         null,
@@ -36,7 +39,7 @@ pub fn main() !void {
 
     rl.setTargetFPS(60);
 
-    const tileSize = 16;
+    const tileSize = 32;
     const background: rl.Color = .black;
     const roundness: f32 = 0.2;
     const segments: f32 = 0.0;
@@ -47,9 +50,10 @@ pub fn main() !void {
     var end_idx: i16 = -1;
     var pathing_type: TraversalType = .walk;
     var path_algo: PathingAlgo = .dfs;
+    var map_algo: GenerationAlgo = .ca;
     var mobility_type: Mobility = .orthogonal;
-    var map = try Grid.init(screenWidth, screenHeight - 128, tileSize, &allocator);
-    var button_box = ButtonBox{
+    const map = try Grid.init(screenWidth, screenHeight - 128, tileSize, &allocator);
+    const button_box = ButtonBox{
         .rect = rl.Rectangle{
             .x = 0,
             .y = @floatFromInt(map.height * 32),
@@ -110,7 +114,17 @@ pub fn main() !void {
                     }
                 }
             }
-            tile.draw();
+            switch (map_algo) {
+                .ca, .bsp => {
+                    tile.draw();
+                },
+                .voronoi => {
+                    tile.draw_voronoi();
+                },
+                .noise => {
+                    tile.draw();
+                }
+            }
         }
 
         const mousePoint = rl.getMousePosition();
@@ -126,6 +140,11 @@ pub fn main() !void {
                 end_selected = false;
             }
         }
+        if (rl.checkCollisionPointRec(mousePoint, reset_map_btn.border_box)) {
+            if (rl.isMouseButtonPressed(.left)) {
+                map.clear();
+            }
+        }
         if (rl.checkCollisionPointRec(mousePoint, path_algo_btn.border_box)) {
             if (rl.isMouseButtonPressed(.left)) {
                 path_algo_btn.on_click(&path_algo);
@@ -136,9 +155,27 @@ pub fn main() !void {
                 path_mobility_btn.on_click(&mobility_type);
             }
         }
+        if (rl.checkCollisionPointRec(mousePoint, map_algo_btn.border_box)) {
+            if (rl.isMouseButtonPressed(.left)) {
+                map_algo_btn.on_click(&map_algo);
+            }
+        }
         if (rl.checkCollisionPointRec(mousePoint, map_gen_btn.border_box)) {
             if (rl.isMouseButtonPressed(.left)) {
-                try Algorithm.Generation.c_a(map, 2, allocator);
+                switch (map_algo) {
+                    .ca => {
+                        try Algorithm.Generation.c_a(map, 2, io, allocator);
+                    },
+                    .bsp => {
+                        try Algorithm.Generation.bsp(map, io, allocator);
+                    },
+                    .voronoi => {
+                        try Algorithm.Generation.voronoi(map, io, allocator);
+                    },
+                    .noise => {
+                        // crickets
+                    }
+                }
             }
         }
         if (rl.checkCollisionPointRec(mousePoint, heat_map_btn.border_box)) {
@@ -148,7 +185,7 @@ pub fn main() !void {
         }
         if (heat_map_on) {
             if (mouse_idx > 0) {
-                var d_map = try Algorithm.Pathing.get_dijkstra_map(map, mouse_idx, pathing_type, mobility_type, allocator);
+                var d_map = try Algorithm.Pathing.get_dijkstra_map(map, tileSize, mouse_idx, pathing_type, mobility_type, allocator);
                 d_map.set_font(font);
                 d_map.draw();
             }

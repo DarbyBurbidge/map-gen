@@ -22,7 +22,7 @@ const TileState = enum {
     traversed,
 };
 
-const TileType = union(enum) {
+pub const TileType = union(enum) {
     wall,
     floor,
     open,
@@ -33,6 +33,7 @@ type: TileType,
 rect: Rectangle,
 border: f32,
 state: TileState,
+voronoi_color: rl.Color,
 
 pub fn init(x: f32, y: f32, size: f32, comptime tile_type: Tag(TileType)) @This() {
     return @This(){
@@ -45,6 +46,7 @@ pub fn init(x: f32, y: f32, size: f32, comptime tile_type: Tag(TileType)) @This(
         },
         .border = 2,
         .state = .none,
+        .voronoi_color = .white,
     };
 }
 
@@ -91,6 +93,9 @@ pub fn set_type(self: *@This(), type_enum: TileType) void {
         },
     }
 }
+pub fn set_voronoi_color(self: *@This(), color: rl.Color) void {
+   self.voronoi_color = color; 
+}
 
 pub fn draw(self: @This()) void {
     const rect = self.rect;
@@ -103,4 +108,17 @@ pub fn draw(self: @This()) void {
 
     rl.drawRectangleRounded(rect, 0.2, 0, .fade(.black, 1.0));
     rl.drawRectangleRounded(inner_rect, 0.2, 0, .fade(self.get_color(), 1.0));
+}
+
+pub fn draw_voronoi(self: @This()) void {
+    const rect = self.rect;
+    const inner_rect = Rectangle{
+        .x = rect.x + self.border,
+        .y = rect.y + self.border,
+        .width = rect.width - (self.border * 2),
+        .height = rect.height - (self.border * 2),
+    };
+
+    rl.drawRectangleRounded(rect, 0.2, 0, .fade(.black, 1.0));
+    rl.drawRectangleRounded(inner_rect, 0.2, 0, .fade(self.voronoi_color, 1.0));
 }
