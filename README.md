@@ -14,15 +14,17 @@ Other resources:
 
 [Computerphile: A* Search Algorithm](https://www.youtube.com/watch?v=ySN5Wnu88nE)
 
+[Adrian's Soapbox](https://adrianb.io/2014/08/09/perlinnoise.html)
+
 ### Progress
 #### Map Generation
 * [x] Cellular Automata
 * [ ] Simple Rooms
-* [ ] BSP Rooms
+* [x] BSP Rooms
 * [ ] Drunkard's Walk
 * [ ] Diffusion Aggregation
-* [ ] Voronoi Diagrams
-* [ ] Perlin/Simplex Noise
+* [x] Voronoi Diagrams (not walkable)
+* [x] Perlin/Simplex Noise (not walkable)
 
 Note: A checkbox does not indicate customizable, simply that it is an enabled option to test with defaults. Once all features are fully customizable this note will disappear.
 
@@ -39,5 +41,9 @@ Currently there are options for:
 * Pathing Algorithm (DFS, BFS, Dijkstra, A-Star)
 * Toggle Dijkstra heatmap for mouse cursor
 
-Coming Soon: Choosing Map Generation Algorithm
+#### On the Horizon
+* Ability to customize algorithm parameters after selection
+* Ability to drop a simple character in a map and walk around
+* Ability to drop enemy NPCs into the map and then do a little test combat
+
 
