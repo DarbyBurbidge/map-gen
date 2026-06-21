@@ -1,89 +1,329 @@
+// std
 const std = @import("std");
 const Init = std.process.Init;
+const Allocator = std.mem.Allocator;
 const assert = std.debug.assert;
+
+// raylib
 const rl = @import("raylib");
 const rg = @import("raygui");
 const Rectangle = rl.Rectangle;
-const Allocator = std.mem.Allocator;
 
+// other
 const Grid = @import("Grid.zig");
+const GridConfig = Grid.Config;
+const TraversalType = @import("Tile.zig").TraversalType;
+const EventLog = @import("EventLog.zig");
+const LogConfig = EventLog.Config;
 const Algorithm = @import("Algorithm.zig");
-const Button = @import("Button.zig");
-const ButtonBox = Button.ButtonBox;
 const PathingAlgo = Algorithm.Pathing.Algorithm;
 const Mobility = Algorithm.Pathing.Mobility;
 const GenerationAlgo = Algorithm.Generation.Algorithm;
-const TraversalType = @import("Tile.zig").TraversalType;
+const ResetMapAlgoState = Algorithm.Generation.MapState;
+const Button = @import("Button.zig");
+const ButtonBox = Button.ButtonBox;
 
 pub fn main(init: Init) !void {
     var gpa = std.heap.DebugAllocator(.{}){};
     const io = init.io;
     const allocator = gpa.allocator();
-    const screenWidth = 1856;
-    const screenHeight = 1056;
-
-    rl.initWindow(screenWidth, screenHeight, "map-gen");
-    defer rl.closeWindow();
-
-    // Load the font
-    const font: rl.Font = rl.loadFontEx(
-        "/home/darby/Projects/systems/map-gen/src/resources/november.ttf",
-        24,
-        null,
-    ) catch |err| {
-        return err;
-    };
-    if (font.texture.id == 0) {
-        std.debug.print("could not load font\n", .{});
-    }
+    const screen_pw = 1920; // 80 * 24
+    const screen_ph = 1080; // 45 * 24
+    const tile_ps = 24;
+    const screen_tw = @divFloor(screen_pw, tile_ps);
+    const screen_th = @divFloor(screen_ph, tile_ps);
 
     rl.setTargetFPS(60);
+    // init I/O
+    rl.initWindow(screen_pw, screen_ph, "map-gen");
+    defer rl.closeWindow();
+    rl.setWindowState(.{.window_topmost = true});
 
-    const tileSize = 32;
+    rl.initAudioDevice();
+    defer rl.closeAudioDevice();
+    rl.setMasterVolume(0.5);
+
+    // default configuration
+    const grid_tw = 50;
+    const grid_th = 30;
+    const map_padding_x_ts = 3;
+    const map_padding_y_ts = 2;
+    const map_tw = grid_tw + map_padding_x_ts * 2;
+    const map_th = grid_th + map_padding_y_ts * 2;
+    const btn_box_tw = screen_tw - map_tw;
+    const btn_box_th = screen_th - map_th;
+    const info_box_tw = screen_tw - map_tw;
+    const info_box_th = map_th;
+    const logger_tw = map_tw;
+    const logger_th = screen_th - map_th;
     const background: rl.Color = .black;
-    const roundness: f32 = 0.2;
-    const segments: f32 = 0.0;
-    var heat_map_on: bool = false;
+    const btn_tw = 6;
+    const btn_th = 2;
+
+    // state
     var start_selected = false;
     var start_idx: i16 = -1;
     var end_selected = false;
     var end_idx: i16 = -1;
-    var pathing_type: TraversalType = .walk;
-    var path_algo: PathingAlgo = .dfs;
-    var map_algo: GenerationAlgo = .ca;
+    var reset_path: bool = false;
+    var reset_map: bool = false;
+    var generate_map: bool = false;
+    var heatmap_on: bool = false;
+    var traversal_type: TraversalType = .walk;
+    var path_algo: PathingAlgo = .a_star;
+    var map_state = ResetMapAlgoState{
+        .algo = .ca,
+        .reset = false,
+    };
     var mobility_type: Mobility = .orthogonal;
-    const map = try Grid.init(screenWidth, screenHeight - 128, tileSize, &allocator);
-    const button_box = ButtonBox{
+
+    // load external resources
+    // music
+    const veridis_quo = try rl.loadMusicStream("/home/darby/Projects/systems/map-gen/src/resources/veridis_quo.ogg");
+    defer rl.unloadMusicStream(veridis_quo);
+    rl.playMusicStream(veridis_quo);
+
+    // font
+    const font: rl.Font = rl.loadFontEx(
+        "/home/darby/Projects/systems/map-gen/src/resources/november.ttf",
+        tile_ps,
+        null,
+    ) catch |err| {
+        return err;
+    };
+
+    if (font.texture.id == 0) {
+        std.debug.print("could not load font\n", .{});
+    }
+
+    const border_tileset: rl.Texture2D = try rl.loadTexture("/home/darby/Projects/systems/map-gen/src/resources/border_pipe_colorized.bmp");
+    const padding_tileset: rl.Texture2D = try rl.loadTexture("/home/darby/Projects/systems/map-gen/src/resources/bricks_w_ends_colorized.bmp");
+    const button_tileset: rl.Texture2D = try rl.loadTexture("/home/darby/Projects/systems/map-gen/src/resources/button_colorized.bmp");
+
+    // configure UI and game components
+    // create map grid
+    const map = try Grid.init(
+        GridConfig{
         .rect = rl.Rectangle{
             .x = 0,
-            .y = @floatFromInt(map.height * 32),
-            .width = 800,
-            .height = @floatFromInt(screenHeight - (map.height * tileSize)),
+            .y = 0,
+            .width = map_tw * tile_ps,
+            .height = map_th * tile_ps,
         },
-        .inner_rect = rl.Rectangle{
-            .x = 2,
-            .y = @floatFromInt((map.height * 32) + 2),
-            .width = 796,
-            .height = @floatFromInt((screenHeight - (map.height * tileSize) - 4)),
+        .tile_ps = tile_ps,
+        .border_tileset = border_tileset,
+        .padding_tileset = padding_tileset,
+        .padding_x = map_padding_x_ts,
+        .padding_y = map_padding_y_ts,
+        .tw = grid_tw,
+        .th = grid_th,
         },
-        .color = .beige,
-        .border_color = .brown,
+        io,
+        allocator,
+    );
+    // create event log
+    var event_log = EventLog.init(
+        LogConfig{
+            .font = font,
+            .rect = rl.Rectangle{
+                .x = 0,
+                .y = (screen_th - logger_th) * tile_ps,
+                .width = logger_tw * tile_ps,
+                .height = logger_th * tile_ps
+            },
+            .tile_ps = tile_ps,
+            .border_tileset = border_tileset,
+        },
+        io,
+        allocator
+    );
+
+    // create button panel
+    var info_box = ButtonBox{
+        .allocator = allocator,
+        .btns = .empty,
+        .rect = rl.Rectangle{
+            .x = (screen_tw - info_box_tw) * tile_ps,
+            .y = 0.0,
+            .width = info_box_tw * tile_ps,
+            .height = info_box_th * tile_ps,
+        },
+        .color = .gray,
+        .btn_tw = btn_tw,
+        .btn_th = btn_th,
+        .tile_ps = tile_ps,
+        .border_tileset = border_tileset,
     };
-    var traversal_btn = Button.TraversalButton.init(32, screenHeight - 112, 160, 32, font);
-    var path_mobility_btn = Button.PathMobilityButton.init(32 + 160 + 32, screenHeight - 112, 160, 32, font);
-    var path_algo_btn = Button.PathingButton.init(32, screenHeight - 48, 160, 32, font, path_algo);
-    var reset_path_btn = Button.ResetButton.init(32 + 160 + 32, screenHeight - 48, 160, 32, font);
-    var reset_map_btn = Button.ResetButton.init(32 + 160 + 32 + 160 + 32, screenHeight - 48, 160, 32, font);
-    var map_algo_btn = Button.MapAlgorithmButton.init(32 + 160 + 32 + 160 + 32 + 160 + 32, screenHeight - 112, 160, 32, font);
-    var map_gen_btn = Button.MapGenButton.init(32 + 160 + 32 + 160 + 32 + 160 + 32, screenHeight - 48, 160, 32, font);
-    var heat_map_btn = Button.HeatMapButton.init(32 + 160 + 32 + 160 + 32, screenHeight - 112, 160, 32, font);
+    var button_box = ButtonBox{
+        .allocator = allocator,
+        .btns = .empty,
+        .rect = rl.Rectangle{
+            .x = (screen_tw - btn_box_tw) * tile_ps,
+            .y = (screen_th - btn_box_th) * tile_ps,
+            .width = btn_box_tw * tile_ps,
+            .height = btn_box_th * tile_ps,
+        },
+        .color = .brown,
+        .btn_tw = btn_tw,
+        .btn_th = btn_th,
+        .tile_ps = tile_ps,
+        .border_tileset = border_tileset,
+    };
+    const first_col_x = (map_tw + 2) * tile_ps;
+    const second_col_x = (map_tw + 2 + btn_tw) * tile_ps + tile_ps;
+    const third_col_x = (map_tw + 2 + 2 * btn_tw) * tile_ps + tile_ps * 2;
+    const first_row_y = (screen_th - 4) * tile_ps;
+    const second_row_y = (screen_th - 4 - 3) * tile_ps;
+    const third_row_y = (screen_th - 4 - 6) * tile_ps;
+
+    // traversal
+    try button_box.add_btn(.{
+        .rect = .{
+            .x = first_col_x,
+            .y = third_row_y,
+            .width = btn_tw * tile_ps,
+            .height = btn_th * tile_ps,
+        },
+        .tile_ps = tile_ps,
+        .message = "a star"[0..],
+        .color = .dark_gray,
+        .text_color = .gold,
+        .font = font,
+        .tileset = button_tileset,
+        .logger = &event_log,
+        .on_click_type = .path_algo,
+        .state = &path_algo
+    });
+    try button_box.add_btn(.{
+        .rect = .{
+            .x = first_col_x,
+            .y = second_row_y,
+            .width = btn_tw * tile_ps,
+            .height = btn_th * tile_ps,
+        },
+        .tile_ps = tile_ps,
+        .message = "walking"[0..],
+        .color = .light_gray,
+        .text_color = .dark_gray,
+        .font = font,
+        .tileset = button_tileset,
+        .logger = &event_log,
+        .on_click_type = .traversal,
+        .state = &traversal_type
+    });
+    try button_box.add_btn(.{
+        .rect = .{
+            .x = second_col_x,
+            .y = second_row_y,
+            .width = btn_tw * tile_ps,
+            .height = btn_th * tile_ps,
+        },
+        .tile_ps = tile_ps,
+        .message = "ortho"[0..],
+        .color = .light_gray,
+        .text_color = .dark_gray,
+        .font = font,
+        .tileset = button_tileset,
+        .logger = &event_log,
+        .on_click_type = .mobility,
+        .state = &mobility_type,
+    });
+    try button_box.add_btn(.{
+        .rect = .{
+            .x = first_col_x,
+            .y = first_row_y,
+            .width = btn_tw * tile_ps,
+            .height = btn_th * tile_ps,
+        },
+        .tile_ps = tile_ps,
+        .message = "reset"[0..],
+        .color = .red,
+        .text_color = .dark_gray,
+        .font = font,
+        .tileset = button_tileset,
+        .logger = &event_log,
+        .on_click_type = .toggle,
+        .state = &reset_path,
+    });
+    // map gen
+    try button_box.add_btn(.{
+        .rect = .{
+            .x = third_col_x,
+            .y = first_row_y,
+            .width = btn_tw * tile_ps,
+            .height = btn_th * tile_ps,
+        },
+        .tile_ps = tile_ps,
+        .message = "reset"[0..],
+        .color = .red,
+        .text_color = .dark_gray,
+        .font = font,
+        .tileset = button_tileset,
+        .logger = &event_log,
+        .on_click_type = .toggle,
+        .state = &reset_map,
+    });
+    try button_box.add_btn(.{
+        .rect = .{
+            .x = third_col_x,
+            .y = third_row_y,
+            .width = btn_tw * tile_ps,
+            .height = btn_th * tile_ps, 
+        },
+        .tile_ps = tile_ps,
+        .message = "cellular"[0..],
+        .color = .light_gray,
+        .text_color = .dark_gray,
+        .font = font,
+        .tileset = button_tileset,
+        .logger = &event_log,
+        .on_click_type = .map_algo,
+        .state = &map_state,
+    });
+    try button_box.add_btn(.{
+        .rect = .{
+            .x = third_col_x,
+            .y = second_row_y,
+            .width = btn_tw * tile_ps,
+            .height = btn_th * tile_ps,
+        },
+        .tile_ps = tile_ps,
+        .message = "create"[0..],
+        .color = .green,
+        .text_color = .dark_gray,
+        .font = font,
+        .tileset = button_tileset,
+        .logger = &event_log,
+        .on_click_type = .toggle,
+        .state = &generate_map,
+    });
+    try button_box.add_btn(.{
+        .rect = .{
+            .x = second_col_x,
+            .y = third_row_y,
+            .width = btn_tw * tile_ps,
+            .height = btn_th * tile_ps,
+        },
+        .tile_ps = tile_ps,
+        .message = "heatmap"[0..],
+        .color = .orange,
+        .text_color = .dark_gray,
+        .font = font,
+        .tileset = button_tileset,
+        .logger = &event_log,
+        .on_click_type = .toggle,
+        .state = &heatmap_on,
+    });
+    
+    // game loop
     while (!rl.windowShouldClose()) {
         var mouse_idx: i32 = -1;
+        // play music
+        rl.updateMusicStream(veridis_quo);
         // Begin drawing
         rl.beginDrawing();
         // Set background
         rl.clearBackground(background);
-        // End drawing
 
         for (map.tiles, 0..) |*tile, idx| {
             // Update
@@ -114,111 +354,88 @@ pub fn main(init: Init) !void {
                     }
                 }
             }
-            switch (map_algo) {
-                .ca, .bsp => {
-                    tile.draw();
-                },
-                .voronoi => {
-                    tile.draw_voronoi();
-                },
-                .noise => {
-                    tile.draw();
-                }
+        }
+        switch (map_state.algo) {
+            .ca, .bsp => {
+                map.draw();
+            },
+            .noise, .voronoi => {
+                map.draw_custom();
+            },
+        }
+
+        if (rl.isKeyPressed(.f11)) {
+            if (rl.isWindowState(.{.window_undecorated = true})) {
+                rl.clearWindowState(.{.window_undecorated = true});
+            } else {
+                rl.setWindowState(.{.window_undecorated = true});
             }
         }
 
-        const mousePoint = rl.getMousePosition();
-        if (rl.checkCollisionPointRec(mousePoint, traversal_btn.border_box)) {
+        const m_cursor = rl.getMousePosition();
+        if (rl.checkCollisionPointRec(m_cursor, button_box.rect)) {
             if (rl.isMouseButtonPressed(.left)) {
-                traversal_btn.on_click(&pathing_type);
+                button_box.on_click(m_cursor);
             }
         }
-        if (rl.checkCollisionPointRec(mousePoint, reset_path_btn.border_box)) {
-            if (rl.isMouseButtonPressed(.left)) {
-                reset_visited(map);
-                start_selected = false;
-                end_selected = false;
-            }
+        if (reset_path or reset_map) {
+            reset_visited(map);
+            start_selected = false;
+            end_selected = false;
+            reset_path = false;
         }
-        if (rl.checkCollisionPointRec(mousePoint, reset_map_btn.border_box)) {
-            if (rl.isMouseButtonPressed(.left)) {
-                map.clear();
-            }
+        if (reset_map or map_state.reset) {
+            map.clear();
+            reset_map = false;
+            map_state.reset = false;
         }
-        if (rl.checkCollisionPointRec(mousePoint, path_algo_btn.border_box)) {
-            if (rl.isMouseButtonPressed(.left)) {
-                path_algo_btn.on_click(&path_algo);
-            }
-        }
-        if (rl.checkCollisionPointRec(mousePoint, path_mobility_btn.border_box)) {
-            if (rl.isMouseButtonPressed(.left)) {
-                path_mobility_btn.on_click(&mobility_type);
-            }
-        }
-        if (rl.checkCollisionPointRec(mousePoint, map_algo_btn.border_box)) {
-            if (rl.isMouseButtonPressed(.left)) {
-                map_algo_btn.on_click(&map_algo);
-            }
-        }
-        if (rl.checkCollisionPointRec(mousePoint, map_gen_btn.border_box)) {
-            if (rl.isMouseButtonPressed(.left)) {
-                switch (map_algo) {
-                    .ca => {
-                        try Algorithm.Generation.c_a(map, 2, io, allocator);
-                    },
-                    .bsp => {
-                        try Algorithm.Generation.bsp(map, io, allocator);
-                    },
-                    .voronoi => {
-                        try Algorithm.Generation.voronoi(map, io, allocator);
-                    },
-                    .noise => {
-                        // crickets
-                    }
+        if (generate_map) {
+            switch (map_state.algo) {
+                .ca => {
+                    try Algorithm.Generation.c_a(map, 2, io, allocator);
+                },
+                .bsp => {
+                    try Algorithm.Generation.bsp(map, io, allocator);
+                },
+                .voronoi => {
+                    try Algorithm.Generation.voronoi(map, io, allocator);
+                },
+                .noise => {
+                    try Algorithm.Generation.noise(map, io, allocator);
                 }
             }
+            generate_map = false;
         }
-        if (rl.checkCollisionPointRec(mousePoint, heat_map_btn.border_box)) {
-            if (rl.isMouseButtonPressed(.left)) {
-                heat_map_on = !heat_map_on;
-            }
-        }
-        if (heat_map_on) {
+        if (heatmap_on) {
             if (mouse_idx > 0) {
-                var d_map = try Algorithm.Pathing.get_dijkstra_map(map, tileSize, mouse_idx, pathing_type, mobility_type, allocator);
+                var d_map = try Algorithm.Pathing.get_dijkstra_map(map, tile_ps, mouse_idx, traversal_type, mobility_type, allocator);
                 d_map.set_font(font);
                 d_map.draw();
             }
         }
 
-        rl.drawRectangleRounded(button_box.rect, roundness, @as(i32, @intFromFloat(segments)), .fade(button_box.border_color, 1.0));
-        rl.drawRectangleRounded(button_box.inner_rect, roundness, @as(i32, @intFromFloat(segments)), .fade(button_box.color, 1.0));
-        traversal_btn.draw();
-        reset_path_btn.draw();
-        path_algo_btn.draw();
-        map_algo_btn.draw();
-        map_gen_btn.draw();
-        heat_map_btn.draw();
-        path_mobility_btn.draw();
-        reset_map_btn.draw();
+        info_box.draw();
+        button_box.draw();
+        event_log.draw();
         if (start_selected and end_selected and start_idx != -1 and end_idx != -1) {
             switch (path_algo) {
                 .dfs => {
-                    try Algorithm.Pathing.dfs(map, @intCast(start_idx), @intCast(end_idx), pathing_type, mobility_type, allocator);
+                    try Algorithm.Pathing.dfs(map, @intCast(start_idx), @intCast(end_idx), traversal_type, mobility_type, allocator);
                 },
                 .bfs => {
-                    try Algorithm.Pathing.bfs(map, @intCast(start_idx), @intCast(end_idx), pathing_type, mobility_type, allocator);
+                    try Algorithm.Pathing.bfs(map, @intCast(start_idx), @intCast(end_idx), traversal_type, mobility_type, allocator);
                 },
                 .dijkstra => {
-                    try Algorithm.Pathing.dijkstra(map, @intCast(start_idx), @intCast(end_idx), pathing_type, mobility_type, allocator);
+                    try Algorithm.Pathing.dijkstra(map, @intCast(start_idx), @intCast(end_idx), traversal_type, mobility_type, allocator);
                 },
                 .a_star => {
-                    try Algorithm.Pathing.a_star(map, @intCast(start_idx), @intCast(end_idx), pathing_type, mobility_type, allocator);
+                    try Algorithm.Pathing.a_star(map, @intCast(start_idx), @intCast(end_idx), traversal_type, mobility_type, allocator);
                 },
             }
             start_idx = -1;
             end_idx = -1;
         }
+        // End drawing
         rl.endDrawing();
     }
 }

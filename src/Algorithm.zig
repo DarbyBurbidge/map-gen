@@ -6,9 +6,15 @@ const Io = std.Io;
 
 const Grid = @import("Grid.zig");
 const Tile = @import("Tile.zig");
+const EventLog = @import("EventLog.zig");
 const TraversalType = Tile.TraversalType;
 
 pub const Generation = struct {
+
+    pub const MapState = struct {
+        algo: Algorithm,
+        reset: bool,
+    };
 
     pub const Algorithm = enum {
         ca,
@@ -16,19 +22,59 @@ pub const Generation = struct {
         voronoi,
         noise,
 
-        pub fn next(self: *@This()) void {
+        pub fn next(self: *@This(), logger: *EventLog) void {
             switch (self.*) {
                 .ca => {
                     self.* = .bsp;
+                    logger.log(
+                        "Selected {} Generation.",
+                        .info,
+                        &.{.{
+                            .text = "Binary Space Partition",
+                            .effect = .shimmer,
+                            .color1 = .blue,
+                            .color2 = .pink,
+                        }}
+                    );
                 },
                 .bsp => {
                     self.* = .voronoi;
+                    logger.log(
+                        "Selected {} Generation.",
+                        .info,
+                        &.{.{
+                            .text = "Voronoi",
+                            .effect = .shimmer,
+                            .color1 = .purple,
+                            .color2 = .maroon,
+                        }}
+                    );
                 },
                 .voronoi => {
                     self.* = .noise;
+                    logger.log(
+                        "Selected {} Generation.",
+                        .info,
+                        &.{.{
+                            .text = "Perlin Noise",
+                            .effect = .shimmer,
+                            .color1 = .red,
+                            .color2 = .orange,
+                        }}
+                    );
                 },
                 .noise => {
                     self.* = .ca;
+                    logger.log(
+                        "Selected {} Generation.",
+                        .info,
+                        &.{.{
+                            .text = "Cellular Automata",
+                            .effect = .shimmer,
+                            .color1 = .green,
+                            .color2 = .yellow,
+                        }}
+                    );
                 },
             }
         }
@@ -153,25 +199,27 @@ pub const Generation = struct {
                 } else if (u_current.height < 12) {
                     direction = .horizontal;
                 }
-                if (u_current.width < 12 and u_current.height < 12) {
+                if (u_current.width > 3 and u_current.width < 12 and u_current.height > 3 and u_current.height < 12) {
                     counter = counter + 1;
                     // area is small enough
+                    const width = rand.intRangeAtMost(u32, 3, u_current.width - 1);
+                    const height = rand.intRangeAtMost(u32, 3, u_current.height - 1);
+                    const x_shift = rand.intRangeAtMost(u32, 1, u_current.width - width);
+                    const y_shift = rand.intRangeAtMost(u32, 1, u_current.height - height);
                     const room = Area{
-                        .x = u_current.x,
-                        .y = u_current.y,
-                        .width = u_current.width,
-                        .height = u_current.height,
+                        .x = u_current.x + x_shift,
+                        .y = u_current.y + y_shift,
+                        .width = width,
+                        .height = height,
                     };
                     std.debug.print("{}\n", .{counter});
                     // make rooms
-                    if (rand.float(f32) > 0.2 or room.width < 3 or room.height < 3) {
-                        try rooms.append(allocator, room);
-                    }
+                    try rooms.append(allocator, room);
                     continue;
                 }
                 switch (direction) {
                     .vertical => {
-                        const split_height = rand.intRangeAtMost(u32, u_current.height / 3, u_current.height / 3 * 2);
+                        const split_height = rand.intRangeAtMost(u32, 4, u_current.height - 4);
                         const top = Area{
                             .x = u_current.x,
                             .y = u_current.y,
@@ -188,7 +236,7 @@ pub const Generation = struct {
                         try to_split.append(allocator, bottom);
                     },
                     .horizontal => {
-                        const split_width = rand.intRangeAtMost(u32, u_current.width / 3, u_current.width / 3 * 2);
+                        const split_width = rand.intRangeAtMost(u32, 4, u_current.width - 4);
                         const left = Area{
                             .x = u_current.x,
                             .y = u_current.y,
@@ -214,13 +262,13 @@ pub const Generation = struct {
         for (rooms.items, 0..) |item, i| {
             // create a room with %80 probability
             const room = Area{
-                .x = item.x + 1,
-                .y = item.y + 1,
-                .width = item.width - 1,
-                .height = item.height - 1,
+                .x = item.x,
+                .y = item.y,
+                .width = item.width,
+                .height = item.height,
             };
             for (room.x..(room.x + room.width)) |x| {
-                for (room.y..(room.y + room.height - 1)) |y| {
+                for (room.y..(room.y + room.height)) |y| {
                     grid.tiles[x + (y * grid.width) - 1].set_type(.floor);
                 }
             }
@@ -234,63 +282,60 @@ pub const Generation = struct {
             if (i < rooms.items.len - 1) {
                 other_room_b = rand.intRangeAtMost(i32, @intCast(i + 1), @intCast(rooms.items.len - 1));
             }
-            if (other_room_a != -1 and other_room_b != -1) {
+            if (other_room_a > -1 and other_room_b > -1) {
                 if (rand.float(f32) > 0.5) {
                     other_room = other_room_a;
                 } else {
                     other_room = other_room_b;
                 }
-            } else if (other_room_a != -1) {
+            } else if (other_room_a > -1) {
                 other_room = other_room_a;
-            } else {
+            } else if (other_room_b > -1) {
                 other_room = other_room_b;
+            } else {
+                unreachable;
             }
-            const area_b: Area = rooms.items[@intCast(other_room)];
-            const room_b = Area{
-                .x = area_b.x + 1,
-                .y = area_b.y + 1,
-                .width = area_b.width - 1,
-                .height = area_b.height - 1,
-            };
+            const room_b: Area = rooms.items[@intCast(other_room)];
 
             // pick point in room
             const point_a = .{
-                .x = rand.intRangeAtMost(u32, room.x + 1, room.x + room.width - 1),
-                .y = rand.intRangeAtMost(u32, room.y + 1, room.y + room.height - 1),
+                .x = rand.intRangeAtMost(u32, room.x + 1, room.x + room.width - 2),
+                .y = rand.intRangeAtMost(u32, room.y + 1, room.y + room.height - 2),
             };
 
             std.debug.print("room a: {}, point a: {}\n", .{room, point_a});
 
             // pick point in other room
             const point_b = .{
-                .x = rand.intRangeAtMost(u32, room_b.x + 1, room_b.x + room_b.width - 1),
-                .y = rand.intRangeAtMost(u32, room_b.y + 1, room_b.y + room_b.height - 1),
+                .x = rand.intRangeAtMost(u32, room_b.x + 1, room_b.x + room_b.width - 2),
+                .y = rand.intRangeAtMost(u32, room_b.y + 1, room_b.y + room_b.height - 2),
             };
             std.debug.print("room b: {}, point b: {}\n", .{room_b, point_b});
 
             // draw horizontal
             const x_dist: i32 = @as(i32, @intCast(point_a.x)) - @as(i32, @intCast(point_b.x));
-            std.debug.print("x_dist: {}", .{x_dist});
+            std.debug.print("x_dist: {} ", .{x_dist});
             if (x_dist >= 0) {
-                for (0..@intCast(x_dist)) |j| {
-                    grid.tiles[point_b.x + j + point_a.y * grid.width].set_type(.floor);
+                for (0..@intCast(x_dist + 1)) |j| {
+                    grid.tiles[point_b.x + j + (point_a.y * grid.width)].set_type(.floor);
                 }
             } else {
-                for (0..@intCast(-x_dist)) |j| {
-                    grid.tiles[point_a.x + j + point_a.y * grid.width].set_type(.floor);
+                std.debug.print("lateral: {}", .{@as(u32, @intCast(-x_dist + 1))});
+                for (0..@intCast((-x_dist) + 1)) |j| {
+                    grid.tiles[point_a.x + j + (point_a.y * grid.width)].set_type(.floor);
                 }
             }
-
+            
             // draw vertical
             const y_dist: i32 = @as(i32, @intCast(point_a.y)) - @as(i32, @intCast(point_b.y));
-            std.debug.print("y_dist: {}", .{y_dist});
+            std.debug.print("y_dist: {}\n", .{y_dist});
             if (y_dist >= 0) {
-                for (0..@intCast(y_dist)) |j| {
-                    grid.tiles[point_b.x + (point_b.y + j + 1) * grid.width].set_type(.floor);
+                for (0..@intCast(y_dist + 1)) |j| {
+                    grid.tiles[point_b.x + ((point_b.y + j) * grid.width)].set_type(.floor);
                 }
             } else {
-                for (0..@intCast(-y_dist)) |j| {
-                    grid.tiles[point_b.x + (point_a.y + j + 1) * grid.width].set_type(.floor);
+                for (0..@intCast((-y_dist) + 1)) |j| {
+                    grid.tiles[point_b.x + ((point_a.y + j) * grid.width)].set_type(.floor);
                 }
             }
 
@@ -348,40 +393,178 @@ pub const Generation = struct {
                 }
             }
             const node_color = rl.colorFromHSV(@floatFromInt(@mod(60 * curr_nn.?.index, 360)), 0.8, 1.0);
-
-            grid.tiles[j].set_voronoi_color(node_color);
+            if (j % grid.width == curr_nn.?.node.x and j / grid.width == curr_nn.?.node.y) {
+                grid.tiles[j].set_custom_color(.black);
+            } else {
+                grid.tiles[j].set_custom_color(node_color);
+            }
         }
     }
 
-    pub fn noise(tiles: []Tile) void {
-        _ = tiles;
+    pub fn noise(grid: Grid, io: Io, allocator: Allocator) !void {
+        var x_off: f32 = 0.0;
+        var y_off: f32 = 0.0;
+        var perlin_arr: std.ArrayList(f32) = .empty;
+        for (0..grid.tiles.len) |i| {
+            const x = i % grid.width;
+            if (x == 0) {
+                x_off = 0.0;
+                y_off += 0.1;
+            } else {
+                x_off += 0.1;
+            }
+            const p_noise: f32 = try perlin_noise(.{.x = x_off, .y = y_off, .p_arr = &perlin_arr}, io, allocator);
+            std.debug.print("noise: {}\n", .{p_noise});
+            if (p_noise > 0.8) {
+                grid.tiles[i].set_custom_color(.white);
+            } else if (p_noise > 0.7) {
+                grid.tiles[i].set_custom_color(rl.Color{.r = @floor(p_noise * 0.9 * 255), .g = @floor(p_noise * 0.8 * 255), .b = @floor(p_noise * 0.7 * 255), .a = 0});
+            } else if (p_noise > 0.5) {
+                grid.tiles[i].set_custom_color(rl.Color{.r = @floor(p_noise * 0.1 * 255), .g = @floor(p_noise * 0.8 * 255), .b = @floor(p_noise * 0.25 * 255), .a = 0});
+            } else {
+                grid.tiles[i].set_custom_color(rl.Color{.r = @floor(((1 - p_noise) * 255) * 0.1), .g = @floor(((1 - p_noise) * 255) * 0.25), .b = @floor(((1 - p_noise) * 255) * 1.0), .a = 0});
+            }
+        }
+        perlin_arr.deinit(allocator);
+    }
+
+    const PERLIN_YWRAPB = 4;
+    const PERLIN_YWRAP = 1 << PERLIN_YWRAPB;
+    const PERLIN_ZWRAPB = 8;
+    const PERLIN_ZWRAP = 1 << PERLIN_ZWRAPB;
+    const PERLIN_SIZE = 4095;
+
+    var perlin_octaves: u16 = 4;
+    var perlin_amp_falloff: f32 = 0.5;
+
+    fn scaled_cosine(i: f32) f32 {
+        return 0.5 * (1.0 - std.math.cos(i * std.math.pi));
+    }
+
+    const PerlinConfig = struct {
+        x: f32,
+        y: f32 = 0,
+        z: f32 = 0,
+        p_arr: *std.ArrayList(f32),
+    };
+
+    fn perlin_noise(args: PerlinConfig, io: Io, allocator: Allocator) !f32 {
+        const rng_impl: std.Random.IoSource = .{ .io = io };
+        const rand = rng_impl.interface();
+        var perlin_arr = args.p_arr;
+        if (perlin_arr.items.len == 0) {
+            for (0..PERLIN_SIZE + 1) |_| {
+              try perlin_arr.append(allocator, rand.float(f32));
+            }
+        }
+        var x = args.x;
+        var y = args.y;
+        var z = args.z;
+
+        if (x < 0) {
+            x = -x;
+        }
+        if (y < 0) {
+            y = -y;
+        }
+        if (z < 0) {
+            z = -z;
+        }
+
+        var xi: u32 = @floor(x);
+        var yi: u32 = @floor(y);
+        var zi: u32 = @floor(z);
+
+        var xf: f32 = x - @as(f32, @floatFromInt(xi));
+        var yf: f32 = y - @as(f32, @floatFromInt(yi));
+        var zf: f32 = z - @as(f32, @floatFromInt(zi));
+
+        var r: f32 = 0;
+        var ampl: f32 = 0.5;
+
+        var n1: f32 = 0.0;
+        var n2: f32 = 0.0; 
+        var n3: f32 = 0.0;
+
+        for (0..perlin_octaves) |_| {
+            var of = xi + (yi << PERLIN_YWRAPB);
+
+            const rxf = scaled_cosine(xf);
+            const ryf = scaled_cosine(yf);
+
+            n1 = perlin_arr.items[of & PERLIN_SIZE];
+            n1 += rxf * (perlin_arr.items[(of + 1) & PERLIN_SIZE] - n1);
+            n2 = perlin_arr.items[(of + PERLIN_YWRAP) & PERLIN_SIZE];
+            n2 += rxf * (perlin_arr.items[(of + PERLIN_YWRAP + 1) & PERLIN_SIZE] - n2);
+            n1 += ryf * (n2 - n1);
+
+            of += PERLIN_ZWRAP;
+            n2 = perlin_arr.items[of & PERLIN_SIZE];
+            n2 += rxf * (perlin_arr.items[(of + 1) & PERLIN_SIZE] - n2);
+            n3 = perlin_arr.items[(of + PERLIN_YWRAP) & PERLIN_SIZE];
+            n3 += rxf * (perlin_arr.items[(of + PERLIN_YWRAP + 1) & PERLIN_SIZE] - n3);
+            n2 += ryf * (n3 - n2);
+
+            n1 += scaled_cosine(zf) * (n2 - n1);
+
+            r += n1 * ampl;
+            ampl *= perlin_amp_falloff;
+            xi <<= 1;
+            xf *= 2;
+            yi <<= 1;
+            yf *= 2;
+            zi <<= 1;
+            zf *= 2;
+
+            if (xf >= 1.0) {
+                xi += 1;
+                xf -= 1;
+            }
+            if (yf >= 1.0) {
+                yi += 1;
+                yf -= 1;
+            }
+            if (zf >= 1.0) {
+                zi += 1;
+                zf -= 1;
+            }
+        }
+        return r;
     }
 };
 
 pub const Pathing = struct {
     pub const DijkstraMap = struct {
         map: []f32,
+        x: u16,
+        y: u16,
         width: f32,
         height: f32,
         tileSize: f32,
         font: ?rl.Font,
+        max_cost: f32,
 
         pub fn set_font(self: *@This(), font: rl.Font) void {
             self.font = font;
         }
 
         pub fn draw(self: @This()) void {
+            var cost_weight: f32 = 0.01;
+            if (self.max_cost != -1 and self.max_cost > 99) {
+                cost_weight = 0.95 / self.max_cost;
+            }
+            std.debug.print("cost_weight: {}", .{cost_weight});
             for (self.map, 0..) |node, i| {
                 const index = @as(f32, @floatFromInt(i));
                 if (node != -1) {
-                    const node_color = rl.colorFromHSV(@mod(60 - node * 3.0, 360), 0.8, 1 - 0.009 * node);
+                    const node_color = rl.colorFromHSV(@mod(60 - node * 3.0, 360), 0.8, 1 - cost_weight * node);
                     const rect = rl.Rectangle{
-                        .x = @mod(index, self.width) * self.tileSize + 2,
-                        .y = @divFloor(index, self.width) * self.tileSize + 2,
-                        .width = self.tileSize - 4,
-                        .height = self.tileSize - 4,
+                        .x = @mod(index, self.width) * self.tileSize + self.x,
+                        .y = @divFloor(index, self.width) * self.tileSize + self.y,
+                        .width = self.tileSize,
+                        .height = self.tileSize,
                     };
-                    rl.drawRectangleRounded(rect, 0.2, 0.0, .fade(node_color, 1.0));
+                    rl.drawRectangleRounded(rect, 0.0, 0.0, .fade(node_color, 1.0));
                 }
             }
         }
@@ -411,6 +594,7 @@ pub const Pathing = struct {
         };
         try queue.push(allocator, start);
         var insert_order: usize = 0;
+        var max_cost: f32 = -1;
         while (queue.pop()) |node| : (insert_order += 1) {
             visited[@intCast(node.idx)] = true;
             d_map[@intCast(node.idx)] = node.cost;
@@ -426,6 +610,9 @@ pub const Pathing = struct {
                             _ = queue.popIndex(queue_idx);
                         }
                     }
+                    if (max_cost < node.cost + 1) {
+                        max_cost = node.cost + 1;
+                    }
                     const new_tracker = DijkstraTracker{
                         .idx = u_neighbor,
                         .parent = node.idx,
@@ -438,10 +625,13 @@ pub const Pathing = struct {
         }
         return DijkstraMap{
             .map = d_map,
+            .x = grid.padding_x * @as(u16, @intFromFloat(grid.tile_ps)),
+            .y = grid.padding_y * @as(u16, @intFromFloat(grid.tile_ps)),
             .width = @floatFromInt(grid.width),
             .height = @floatFromInt(grid.height),
             .tileSize = tileSize,
             .font = null,
+            .max_cost = max_cost,
         };
     }
 
@@ -451,19 +641,55 @@ pub const Pathing = struct {
         dijkstra,
         a_star,
 
-        pub fn next(self: *@This()) void {
+        pub fn next(self: *@This(), logger: *EventLog) void {
             switch (self.*) {
                 .dfs => {
                     self.* = .bfs;
+                    logger.log(
+                        "Selected {} Pathing.",
+                        .info,
+                        &.{.{
+                            .text = "Breadth First Search",
+                            .effect = .fading,
+                            .color1 = .blue,
+                        }}
+                    );
                 },
                 .bfs => {
                     self.* = .dijkstra;
+                    logger.log(
+                        "Selected {} Pathing.",
+                        .info,
+                        &.{.{
+                            .text = "Dijkstra",
+                            .effect = .fading,
+                            .color1 = .green,
+                        }}
+                    );
                 },
                 .dijkstra => {
                     self.* = .a_star;
+                    logger.log(
+                        "Selected {} Pathing.",
+                        .info,
+                        &.{.{
+                            .text = "A*",
+                            .effect = .fading,
+                            .color1 = .purple,
+                        }}
+                    );
                 },
                 .a_star => {
                     self.* = .dfs;
+                    logger.log(
+                        "Selected {} Pathing.",
+                        .info,
+                        &.{.{
+                            .text = "Depth First Search",
+                            .effect = .fading,
+                            .color1 = .red,
+                        }}
+                    );
                 },
             }
         }
@@ -472,13 +698,31 @@ pub const Pathing = struct {
     pub const Mobility = enum {
         orthogonal,
         diagonal,
-        pub fn next(self: *@This()) void {
+        pub fn next(self: *@This(), logger: *EventLog) void {
             switch (self.*) {
                 .orthogonal => {
                     self.* = .diagonal;
+                    logger.log(
+                        "You feel {} agile.",
+                        .alert,
+                        &.{.{
+                            .text = "more",
+                            .effect = .flat,
+                            .color1 = .green,
+                        }}
+                    );
                 },
                 .diagonal => {
                     self.* = .orthogonal;
+                    logger.log(
+                        "You feel {} agile.",
+                        .alert,
+                        &.{.{
+                            .text = "less",
+                            .effect = .flat,
+                            .color1 = .red,
+                        }}
+                    );
                 },
             }
         }

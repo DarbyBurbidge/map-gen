@@ -4,6 +4,8 @@ const Tag = std.meta.Tag;
 const Rectangle = rl.Rectangle;
 const Color = rl.Color;
 
+const EventLog = @import("EventLog.zig");
+
 pub const Traversible = enum {
     no,
     walk,
@@ -13,6 +15,27 @@ pub const Traversible = enum {
 pub const TraversalType = enum {
     walk,
     fly,
+
+    pub fn next(self: *@This(), logger: *EventLog) void {
+        switch (self.*) {
+            .fly => {
+                self.* = .walk;
+                logger.log(
+                    "You feel yourself sink slowly back to the ground.", 
+                    .warning, 
+                    &.{}
+                );
+            },
+            .walk => {
+                self.* = .fly;
+                logger.log(
+                    "You feel youself float into the air!",
+                    .warning,
+                    &.{}
+                );
+            },
+        }
+    }
 };
 
 const TileState = enum {
@@ -33,7 +56,7 @@ type: TileType,
 rect: Rectangle,
 border: f32,
 state: TileState,
-voronoi_color: rl.Color,
+custom_color: rl.Color,
 
 pub fn init(x: f32, y: f32, size: f32, comptime tile_type: Tag(TileType)) @This() {
     return @This(){
@@ -44,9 +67,9 @@ pub fn init(x: f32, y: f32, size: f32, comptime tile_type: Tag(TileType)) @This(
             .width = size,
             .height = size,
         },
-        .border = 2,
+        .border = 0,
         .state = .none,
-        .voronoi_color = .white,
+        .custom_color = .dark_gray,
     };
 }
 
@@ -68,7 +91,7 @@ pub fn get_color(self: @This()) rl.Color {
             .wall => .gray,
             .floor => .brown,
             .open => .black,
-            .unformed => .white,
+            .unformed => .dark_gray,
         },
     };
 }
@@ -93,9 +116,10 @@ pub fn set_type(self: *@This(), type_enum: TileType) void {
         },
     }
 }
-pub fn set_voronoi_color(self: *@This(), color: rl.Color) void {
-   self.voronoi_color = color; 
+pub fn set_custom_color(self: *@This(), color: rl.Color) void {
+   self.custom_color = color; 
 }
+
 
 pub fn draw(self: @This()) void {
     const rect = self.rect;
@@ -106,11 +130,11 @@ pub fn draw(self: @This()) void {
         .height = rect.height - (self.border * 2),
     };
 
-    rl.drawRectangleRounded(rect, 0.2, 0, .fade(.black, 1.0));
-    rl.drawRectangleRounded(inner_rect, 0.2, 0, .fade(self.get_color(), 1.0));
+    rl.drawRectangleRounded(rect, 0.0, 0, .fade(.black, 1.0));
+    rl.drawRectangleRounded(inner_rect, 0.0, 0, .fade(self.get_color(), 1.0));
 }
 
-pub fn draw_voronoi(self: @This()) void {
+pub fn draw_custom(self: @This()) void {
     const rect = self.rect;
     const inner_rect = Rectangle{
         .x = rect.x + self.border,
@@ -119,6 +143,11 @@ pub fn draw_voronoi(self: @This()) void {
         .height = rect.height - (self.border * 2),
     };
 
-    rl.drawRectangleRounded(rect, 0.2, 0, .fade(.black, 1.0));
-    rl.drawRectangleRounded(inner_rect, 0.2, 0, .fade(self.voronoi_color, 1.0));
+    rl.drawRectangleRounded(rect, 0.0, 0, .fade(.black, 1.0));
+    rl.drawRectangleRounded(inner_rect, 0.0, 0, .fade(self.custom_color, 1.0));
+}
+
+pub fn clear(self: *@This()) void {
+        self.type = .unformed;
+        self.custom_color = .dark_gray;
 }
