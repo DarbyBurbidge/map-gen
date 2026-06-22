@@ -23,6 +23,7 @@ Other resources:
 * [x] BSP Rooms
 * [ ] Drunkard's Walk
 * [ ] Diffusion Aggregation
+* [ ] Wave Function Collapse
 * [x] Voronoi Diagrams (not walkable)
 * [x] Perlin/Simplex Noise (not walkable)
 
@@ -41,7 +42,24 @@ Currently there are options for:
 * Pathing Algorithm (DFS, BFS, Dijkstra, A-Star)
 * Toggle Dijkstra heatmap for mouse cursor
 
+#### Art
+* [x] Border tiles for panels (gold/orange piping)
+* [x] Padding tiles for map (bricks)
+* [x] Border tiles for buttons (silver riveting)
+* [ ] Dungeon tiles (wall, floor)
+* [ ] Cave tiles (wall, floor, abyss)
+* [ ] Voronoi tiles (not sure here)
+* [ ] Overworld tiles (deep sea, ocean, coastal, grassland, forest, mountain/hill, summit)
+
 #### On the Horizon
+* Minimap
+* Simple Character Info Screen
+    * Name
+    * HP
+    * Mana
+    * stats (Str/Agi/Int)
+    * status effects
+* Inventory Panel
 * Ability to customize algorithm parameters after selection
 * Ability to drop a simple character in a map and walk around
 * Ability to drop enemy NPCs into the map and then do a little test combat
