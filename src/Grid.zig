@@ -9,13 +9,14 @@ const Texture2D = rl.Texture2D;
 const Tile = @import("Tile.zig");
 const Traversible = Tile.Traversible;
 const Self = @This();
-const TileType = Tile.TileType;
+const TileType = Tile.Type;
 
 pub const Config = struct{
     rect: Rectangle,
     tile_ps: f32,
     border_tileset: Texture2D,
     padding_tileset: Texture2D,
+    tile_tileset: Texture2D,
     padding_x: u16,
     padding_y: u16,
     tw: u16,
@@ -50,7 +51,10 @@ pub fn init(config: Config, io: Io, gpa: Allocator) !Self {
             x_pos,
             y_pos,
             config.tile_ps, 
+            config.tile_tileset,
+            .cave,
             .unformed,
+            io,
         );
     }
 
@@ -86,7 +90,7 @@ pub fn clear(self: *const @This()) void {
 pub fn fill(self: *const @This(), fill_type: TileType) void {
     const gridSize = self.width * self.height;
     for (0..gridSize) |idx| {
-        self.tiles[idx].set_type(fill_type);
+        self.tiles[idx].set_localtype(fill_type);
     }
 }
 
@@ -99,7 +103,20 @@ pub fn fix_edges(self: *const @This()) void {
             idx < self.width or
             idx >= self.width * (self.height - 1)
         ) {
-            self.tiles[idx].set_type(.wall);
+            self.tiles[idx].set_localtype(.ceiling);
+        }
+        if (idx > self.width and
+            self.tiles[idx].get_type() == .floor and
+            self.tiles[idx - self.width].get_type() == .ceiling
+        ) {
+            self.tiles[idx].set_localtype(.wall);
+        }
+        if (idx > self.width and
+            self.tiles[idx].get_type() == .open and
+            (self.tiles[idx - self.width].get_type() == .open or
+            self.tiles[idx - self.width].get_type() == .abyss)
+        ) {
+            self.tiles[idx].set_localtype(.abyss);
         }
     }
 }

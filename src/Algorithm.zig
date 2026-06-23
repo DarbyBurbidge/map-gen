@@ -88,18 +88,19 @@ pub const Generation = struct {
         //var prng = std.Random.DefaultPrng.init(seed);
         for (0..grid.width) |x| {
             for (0..grid.height) |y| {
+                grid.tiles[x + y * grid.width].set_biome(.cave);
                 if (x == 0 or x == grid.width - 1) {
-                    grid.tiles[x + y * grid.width].set_type(.wall);
+                    grid.tiles[x + y * grid.width].set_localtype(.ceiling);
                 } else if (y == 0 or y == grid.height - 1) {
-                    grid.tiles[x + y * grid.width].set_type(.wall);
+                    grid.tiles[x + y * grid.width].set_localtype(.ceiling);
                 } else {
                     const roll = rand.float(f32);
-                    if (roll > 0.65) {
-                        grid.tiles[x + y * grid.width].set_type(.wall);
+                    if (roll > 0.60) {
+                        grid.tiles[x + y * grid.width].set_localtype(.ceiling);
                     } else if (roll > 0.45) {
-                        grid.tiles[x + y * grid.width].set_type(.open);
+                        grid.tiles[x + y * grid.width].set_localtype(.open);
                     } else {
-                        grid.tiles[x + y * grid.width].set_type(.floor);
+                        grid.tiles[x + y * grid.width].set_localtype(.floor);
                     }
                 }
             }
@@ -118,17 +119,16 @@ pub const Generation = struct {
                     const index = x + y * grid.width;
                     const count = counts.pop();
                     if (count.?.wall > 4) {
-                        grid.tiles[index].set_type(.wall);
-                    } else if (count.?.floor == 8) {
-                        grid.tiles[index].set_type(.wall);
+                        grid.tiles[index].set_localtype(.ceiling);
                     } else if (count.?.open > 3) {
-                        grid.tiles[index].set_type(.open);
+                        grid.tiles[index].set_localtype(.open);
                     } else {
-                        grid.tiles[index].set_type(.floor);
+                        grid.tiles[index].set_localtype(.floor);
                     }
                 }
             }
         }
+        grid.fix_edges();
     }
 
     pub fn count_neighbors(grid: Grid, index: u64) NeighborCounts {
@@ -137,13 +137,13 @@ pub const Generation = struct {
             for (0..3) |y| {
                 const neighbor_type = grid.tiles[index - grid.width - 1 + x + y * (grid.width)].type;
                 switch (neighbor_type) {
-                    .wall => {
+                    .wall, .ceiling => {
                         counter.wall += 1;
                     },
                     .floor => {
                         counter.floor += 1;
                     },
-                    .open => {
+                    .open, .abyss => {
                         counter.open += 1;
                     },
                     else => {
@@ -174,7 +174,10 @@ pub const Generation = struct {
     };
 
     pub fn bsp(grid: Grid, io: Io, allocator: std.mem.Allocator) !void {
-        grid.fill(.wall);
+        for (grid.tiles) |*u_tile| {
+            u_tile.set_biome(.dungeon);
+        }
+        grid.fill(.ceiling);
         var to_split: ArrayList(Area) = .empty;
         defer to_split.deinit(allocator);
         var rooms: ArrayList(Area) = .empty;
@@ -269,7 +272,7 @@ pub const Generation = struct {
             };
             for (room.x..(room.x + room.width)) |x| {
                 for (room.y..(room.y + room.height)) |y| {
-                    grid.tiles[x + (y * grid.width) - 1].set_type(.floor);
+                    grid.tiles[x + (y * grid.width) - 1].set_localtype(.floor);
                 }
             }
             // dog legs
@@ -317,12 +320,12 @@ pub const Generation = struct {
             std.debug.print("x_dist: {} ", .{x_dist});
             if (x_dist >= 0) {
                 for (0..@intCast(x_dist + 1)) |j| {
-                    grid.tiles[point_b.x + j + (point_a.y * grid.width)].set_type(.floor);
+                    grid.tiles[point_b.x + j + (point_a.y * grid.width)].set_localtype(.floor);
                 }
             } else {
                 std.debug.print("lateral: {}", .{@as(u32, @intCast(-x_dist + 1))});
                 for (0..@intCast((-x_dist) + 1)) |j| {
-                    grid.tiles[point_a.x + j + (point_a.y * grid.width)].set_type(.floor);
+                    grid.tiles[point_a.x + j + (point_a.y * grid.width)].set_localtype(.floor);
                 }
             }
             
@@ -331,11 +334,11 @@ pub const Generation = struct {
             std.debug.print("y_dist: {}\n", .{y_dist});
             if (y_dist >= 0) {
                 for (0..@intCast(y_dist + 1)) |j| {
-                    grid.tiles[point_b.x + ((point_b.y + j) * grid.width)].set_type(.floor);
+                    grid.tiles[point_b.x + ((point_b.y + j) * grid.width)].set_localtype(.floor);
                 }
             } else {
                 for (0..@intCast((-y_dist) + 1)) |j| {
-                    grid.tiles[point_b.x + ((point_a.y + j) * grid.width)].set_type(.floor);
+                    grid.tiles[point_b.x + ((point_a.y + j) * grid.width)].set_localtype(.floor);
                 }
             }
 
@@ -415,14 +418,22 @@ pub const Generation = struct {
             }
             const p_noise: f32 = try perlin_noise(.{.x = x_off, .y = y_off, .p_arr = &perlin_arr}, io, allocator);
             std.debug.print("noise: {}\n", .{p_noise});
-            if (p_noise > 0.8) {
-                grid.tiles[i].set_custom_color(.white);
-            } else if (p_noise > 0.7) {
-                grid.tiles[i].set_custom_color(rl.Color{.r = @floor(p_noise * 0.9 * 255), .g = @floor(p_noise * 0.8 * 255), .b = @floor(p_noise * 0.7 * 255), .a = 0});
-            } else if (p_noise > 0.5) {
-                grid.tiles[i].set_custom_color(rl.Color{.r = @floor(p_noise * 0.1 * 255), .g = @floor(p_noise * 0.8 * 255), .b = @floor(p_noise * 0.25 * 255), .a = 0});
+            if (p_noise > 0.75) {
+                grid.tiles[i].set_overtype(.summit);
+            } else if (p_noise > 0.65) {
+                grid.tiles[i].set_overtype(.mountain);
+            } else if (p_noise > 0.60) {
+                grid.tiles[i].set_overtype(.forest);
+            } else if (p_noise > 0.55) {
+                grid.tiles[i].set_overtype(.grassland);
+            } else if (p_noise > 0.50) {
+                grid.tiles[i].set_overtype(.beach);
+            } else if (p_noise > 0.40) {
+                grid.tiles[i].set_overtype(.coastal);
+            } else if (p_noise > 0.30) {
+                grid.tiles[i].set_overtype(.ocean);
             } else {
-                grid.tiles[i].set_custom_color(rl.Color{.r = @floor(((1 - p_noise) * 255) * 0.1), .g = @floor(((1 - p_noise) * 255) * 0.25), .b = @floor(((1 - p_noise) * 255) * 1.0), .a = 0});
+                grid.tiles[i].set_overtype(.deep_sea);
             }
         }
         perlin_arr.deinit(allocator);

@@ -99,6 +99,7 @@ pub fn main(init: Init) !void {
     const border_tileset: rl.Texture2D = try rl.loadTexture("/home/darby/Projects/systems/map-gen/src/resources/border_pipe_colorized.bmp");
     const padding_tileset: rl.Texture2D = try rl.loadTexture("/home/darby/Projects/systems/map-gen/src/resources/bricks_w_ends_colorized.bmp");
     const button_tileset: rl.Texture2D = try rl.loadTexture("/home/darby/Projects/systems/map-gen/src/resources/button_colorized.bmp");
+    const tile_tileset: rl.Texture2D = try rl.loadTexture("/home/darby/Projects/systems/map-gen/src/resources/dungeons_and_caves.bmp");
 
     // configure UI and game components
     // create map grid
@@ -113,6 +114,7 @@ pub fn main(init: Init) !void {
         .tile_ps = tile_ps,
         .border_tileset = border_tileset,
         .padding_tileset = padding_tileset,
+        .tile_tileset = tile_tileset,
         .padding_x = map_padding_x_ts,
         .padding_y = map_padding_y_ts,
         .tw = grid_tw,
@@ -329,7 +331,7 @@ pub fn main(init: Init) !void {
             // Update
             const mousePoint = rl.getMousePosition();
             // Check if the mouse is over the "button" rectangle
-            if (rl.checkCollisionPointRec(mousePoint, tile.rect)) {
+            if (rl.checkCollisionPointRec(mousePoint, tile.dest_rect)) {
                 mouse_idx = @intCast(idx);
                 // Check if the left mouse button was pressed in this specific frame
                 if (rl.isMouseButtonPressed(.left)) {
@@ -356,10 +358,10 @@ pub fn main(init: Init) !void {
             }
         }
         switch (map_state.algo) {
-            .ca, .bsp => {
+            .ca, .bsp, .noise => {
                 map.draw();
             },
-            .noise, .voronoi => {
+            .voronoi => {
                 map.draw_custom();
             },
         }
