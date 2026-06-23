@@ -46,10 +46,10 @@ Currently there are options for:
 * [x] Border tiles for panels (gold/orange piping)
 * [x] Padding tiles for map (bricks)
 * [x] Border tiles for buttons (silver riveting)
-* [ ] Dungeon tiles (wall, floor)
-* [ ] Cave tiles (wall, floor, abyss)
+* [x] Dungeon tiles (wall, floor)
+* [x] Cave tiles (wall, floor, abyss)
 * [ ] Voronoi tiles (not sure here)
-* [ ] Overworld tiles (deep sea, ocean, coastal, grassland, forest, mountain/hill, summit)
+* [x] Overworld tiles (deep sea, ocean, coastal, beach, grassland, forest, mountain/hill, summit)
 
 #### On the Horizon
 * Minimap
