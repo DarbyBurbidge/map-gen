@@ -134,8 +134,8 @@ pub fn get_color(self: @This()) rl.Color {
         .end => .red,
         .traversed => .yellow,
         .none => switch (self.type) {
-            .wall => .gray,
-            .ceiling => .gray,
+            .wall => .brown,
+            .ceiling => .dark_gray,
             .floor => .brown,
             .open => .black,
             .abyss => .black,

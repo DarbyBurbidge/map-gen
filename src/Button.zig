@@ -22,6 +22,7 @@ pub const OnClick = enum {
     map_algo,
     mobility,
     toggle,
+    menu,
 };
 
 rect: Rectangle,
@@ -44,7 +45,7 @@ pub const ButtonBox = struct {
         // check bounding for btns
         for (self.btns.items) |*u_btn| {
             if (rl.checkCollisionPointRec(m_cursor, u_btn.rect)) {
-                u_btn.on_click();
+                u_btn.on_click(u_btn);
             }
         }
 
@@ -134,7 +135,7 @@ const BtnConfig = struct {
     font: rl.Font,
     tileset: rl.Texture2D,
     logger: *EventLog, 
-    on_click_type: OnClick,
+    on_click: *const fn (*Button) void,
     state: *anyopaque,
 };
 
@@ -146,8 +147,8 @@ pub const Button = struct {
     text_color: rl.Color,
     font: rl.Font,
     tileset: rl.Texture2D,
-    logger: *EventLog,
-    on_click_type: OnClick,
+    logger: ?*EventLog,
+    on_click: *const fn (*Button) void,
     state: *anyopaque,
 
     pub fn init(config: BtnConfig) @This() {
@@ -160,7 +161,7 @@ pub const Button = struct {
             .font = config.font,
             .tileset = config.tileset,
             .logger = config.logger,
-            .on_click_type = config.on_click_type,
+            .on_click = config.on_click,
             .state = config.state,
         };
     }
@@ -178,15 +179,6 @@ pub const Button = struct {
         rl.drawTextEx(self.font, self.message[0.. :0], .{ .x = self.rect.x + x_off, .y = self.rect.y + 12 }, @floatFromInt(self.font.baseSize), 2, self.text_color);
     }
     
-    pub fn on_click(self: *@This()) void {
-        switch(self.on_click_type) {
-            .traversal => traversal_on_click(self),
-            .path_algo => path_algo_on_click(self),
-            .map_algo => map_algo_on_click(self),
-            .toggle => toggle_on_click(self),
-            .mobility => mobility_on_click(self),
-        }
-    }
 
     fn draw_border(self: @This()) void {
         const btn_tw: u32 = @as(u32, @intFromFloat(self.rect.width / self.tile_ps));
@@ -247,7 +239,7 @@ pub const Button = struct {
 
 pub fn traversal_on_click(self: *Button) void {
     const traversal_type: *TraversalType = @ptrCast(self.state);
-    traversal_type.next(self.logger);
+    traversal_type.next(self.logger.?);
     switch (traversal_type.*) {
         .fly => {
             self.message = "flying"[0..];
@@ -264,7 +256,7 @@ pub fn traversal_on_click(self: *Button) void {
 
 pub fn path_algo_on_click(self: *Button) void {
     const algo: *PathingAlgo = @ptrCast(self.state);
-    algo.next(self.logger);
+    algo.next(self.logger.?);
     switch (algo.*) {
         .dfs => {
             self.message = "dfs"[0..];
@@ -291,7 +283,7 @@ pub fn path_algo_on_click(self: *Button) void {
 
 pub fn map_algo_on_click(self: *Button) void {
     const map_state: *ResetMapAlgoState = @ptrCast(self.state);
-    map_state.algo.next(self.logger);
+    map_state.algo.next(self.logger.?);
     map_state.reset = true;
     switch (map_state.algo) {
         .ca => {
@@ -325,7 +317,7 @@ pub fn toggle_on_click(self: *Button) void {
 
 pub fn mobility_on_click(self: *Button) void {
     const mobility: *Mobility = @ptrCast(self.state);
-    mobility.next(self.logger);
+    mobility.next(self.logger.?);
     switch (mobility.*) {
         .orthogonal => {
             self.message = "ortho"[0..];
@@ -339,3 +331,4 @@ pub fn mobility_on_click(self: *Button) void {
         },
     }
 }
+

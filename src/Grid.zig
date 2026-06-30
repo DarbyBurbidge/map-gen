@@ -8,6 +8,7 @@ const Vector2 = rl.Vector2;
 const Texture2D = rl.Texture2D;
 const Tile = @import("Tile.zig");
 const Traversible = Tile.Traversible;
+const TraversalType = Tile.TraversalType;
 const Self = @This();
 const TileType = Tile.Type;
 
@@ -297,4 +298,41 @@ fn draw_border(self: @This()) void {
             rl.drawTextureRec(self.border_tileset, src, dest, .white);
         }
     }
+}
+
+pub fn get_open_location(self: @This()) ?Vector2 {
+    // prioritizes top left
+    for (self.tiles, 0..) |u_tile, i| {
+        if (u_tile.get_traversible() == .walk) {
+            return Vector2{
+                .x = @floatFromInt(i % self.width),
+                .y = @floatFromInt(i / self.width),
+            };
+        }
+    }
+}
+
+pub fn get_canvas(self: @This()) rl.Rectangle {
+    return rl.Rectangle{
+        .x = self.rect.x + self.padding_x * self.tile_ps, 
+        .y = self.rect.y + self.padding_y * self.tile_ps, 
+        .width = (self.width - (2 * self.padding_x)) * self.tile_ps,
+        .height = (self.height - (2 * self.padding_y)) * self.tile_ps,
+    };
+}
+
+pub fn is_traversible(self: @This(), traversal_type: TraversalType, location: rl.Vector2) bool {
+    const idx: u32 = @intFromFloat(
+        location.y * self.width + location.x
+    );
+    std.debug.print("new location: {}, {}\n", .{location, idx});
+    const traversible = self.tiles[idx].get_traversible();
+    return switch(traversible) {
+        .walk => true,
+        .no => false,
+        .fly => switch (traversal_type) {
+            .walk => false,
+            .fly => true,
+        },
+    };
 }
