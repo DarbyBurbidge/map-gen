@@ -48,11 +48,13 @@ Currently there are options for:
 * [x] Border tiles for buttons (silver riveting)
 * [x] Dungeon tiles (wall, floor)
 * [x] Cave tiles (wall, floor, abyss)
-* [ ] Voronoi tiles (not sure here)
+* [ ] Voronoi tiles (not sure here) - Currently Disabled
 * [x] Overworld tiles (deep sea, ocean, coastal, beach, grassland, forest, mountain/hill, summit)
 
 #### On the Horizon
-* Minimap
+* [x] Main Menu (will probably put algorithm parameters here)
+* [ ] Settings Menu - Ability to customize algorithm parameters after selection
+* [x] Minimap
 * Simple Character Info Screen
     * Name
     * HP
@@ -60,8 +62,7 @@ Currently there are options for:
     * stats (Str/Agi/Int)
     * status effects
 * Inventory Panel
-* Ability to customize algorithm parameters after selection
-* Ability to drop a simple character in a map and walk around
+* [x] Ability to drop a simple character in a map and walk around
 * Ability to drop enemy NPCs into the map and then do a little test combat
 
 
